@@ -1,0 +1,271 @@
+
+%clc; close all;clear all;
+
+
+%% Model
+% Define the initial position
+x_initial = 300;
+y_initial = -400;
+
+% Define the final position after the turn
+x_final = 20;
+y_final = 300;
+
+% Define the number of points
+num_points_straight = 16; % Number of points for the straight line
+num_points_turn = 19; % Number of points for the turn
+
+% Define the straight line segment
+x_straight = x_initial * ones(1, num_points_straight);
+y_straight = linspace(y_initial, 0.01, num_points_straight);
+
+% Calculate the angle required for the turn
+turn_radius = 300;
+arc_length = sqrt((x_initial - x_final)^2 + (y_final - 0.01)^2);
+theta_final = 2 * asin(arc_length / (2 * turn_radius)); % Calculate theta required to reach final position
+
+%TODO based on new y_init = 0.01, calculate the right starting theta
+
+% Define the turning maneuver (left turn with 300 meters radius)
+theta = linspace(0.085, theta_final, num_points_turn); % Angle from 0 to theta_final radians
+x_turn = x_initial - turn_radius * (1 - cos(theta)); % X coordinates during the turn
+y_turn = turn_radius * sin(theta); % Y coordinates during the turn
+
+% Combine straight and turning parts
+x_total = [x_straight, x_turn];
+y_total = [y_straight, y_turn];
+
+%% Data
+
+% Define the data
+x = [301.5, 298.23, 297.83, 300.42, 301.94, 299.5, 305.98, 301.25, 299.73, 299.2, ...
+     298.62, 301.84, 299.6, 295.3, 299.3, 301.95, 296.3, 295.11, 295.12, 289.9, ...
+     283.51, 276.42, 264.22, 250.25, 236.66, 217.47, 199.75, 179.7, 160, 140.92, ...
+     113.53, 93.68, 69.71, 45.93, 20.87];
+y = [-401.46, -375.44, -346.15, -320.2, -300.08, -274.12, -253.45, -226.4, -200.65, -171.62, ...
+     -152.11, -125.19, -93.4, -74.79, -49.12, -28.73, 2.99, 25.65, 49.86, 72.87, ...
+     96.34, 120.4, 144.69, 168.06, 184.99, 205.11, 221.82, 238.3, 253.02, 267.19, ...
+     270.71, 285.86, 288.48, 292.9, 298.77];
+
+
+%% Filtering
+
+delta_T = 1; %measurements period
+sigma_a = 0.2; %The random acceleration standard deviation (m/s)
+sigma_x_m = 3; %The measurement error standard deviation (m)
+sigma_y_m = 3; %The measurement error standard deviation (m)
+
+% Transition matrix (F)
+F = [1 delta_T  0.5*delta_T   0         0       0;...
+     0 1        delta_T       0         0       0;...
+     0 0        1             0         0       0;...
+     0 0        0             1         delta_T 0.5*delta_T;...
+     0 0        0             0         1       delta_T;...
+     0 0        0             0         0       1]; % uncertainty estimate P(0,0)
+
+% Process noise matrix (Q)
+Q = sigma_a^2*[delta_T^4/4 delta_T^3/2 delta_T^2/2   0           0            0;...
+     delta_T^3/2 delta_T^2   delta_T       0           0            0;...
+     delta_T^2/2 delta_T     1             0           0            0;...
+     0           0           0             delta_T^4/4 delta_T^3/2  delta_T^2/2;...
+     0           0           0             delta_T^3/2 delta_T^2    delta_T;...
+     0           0           0             delta_T^2/2 delta_T      1];
+
+% Measurment uncertainty 
+R = [sigma_x_m^2 0; 
+     0           sigma_y_m^2];
+
+% Define the data
+x = [301.5, 298.23, 297.83, 300.42, 301.94, 299.5, 305.98, 301.25, 299.73, 299.2, ...
+     298.62, 301.84, 299.6, 295.3, 299.3, 301.95, 296.3, 295.11, 295.12, 289.9, ...
+     283.51, 276.42, 264.22, 250.25, 236.66, 217.47, 199.75, 179.7, 160, 140.92, ...
+     113.53, 93.68, 69.71, 45.93, 20.87];
+y = [-401.46, -375.44, -346.15, -320.2, -300.08, -274.12, -253.45, -226.4, -200.65, -171.62, ...
+     -152.11, -125.19, -93.4, -74.79, -49.12, -28.73, 2.99, 25.65, 49.86, 72.87, ...
+     96.34, 120.4, 144.69, 168.06, 184.99, 205.11, 221.82, 238.3, 253.02, 267.19, ...
+     270.71, 285.86, 288.48, 292.9, 298.77];
+
+% Iteration Zero
+% 1. Initialization 
+
+x_estimate_init = [0 0 0 0 0 0]'; %x^hat(0,0)
+uncertainty_estimate_init = [500 0   0   0    0   0;...
+                             0   500 0   0    0   0;...
+                             0   0   500 0    0   0;...
+                             0   0   0   500  0   0;...
+                             0   0   0   0    500 0;...
+                             0   0   0   0    0   500]; % uncertainty estimate P(0,0)
+% 2. Predication
+x_estimate_pred           = F*x_estimate_init;
+uncertainty_estimate_pred = F*uncertainty_estimate_init*F' + Q; 
+
+% Storage for estimates and uncertainties
+x_estimates = zeros(6, length(x));
+uncertainty_estimates = zeros(6, 6, length(x));
+x_y_uncertainty = zeros(2,2, length(x));
+
+% KF Loop 
+for ii = 1:length(x)
+    
+    % 1. Measure
+    z = [x(ii); y(ii)];
+    %The dimension of zn is 2×1 and the dimension of xn is 6×1. Therefore, the dimension 
+    % of the observation matrix H shall be 2 × 6.
+    H = [1 0 0 0 0 0;...
+         0 0 0 1 0 0];
+
+    % 2. Update
+    % Kalman gain 
+    K = uncertainty_estimate_pred * H' * (H * uncertainty_estimate_pred * H' + R)^(-1); 
+
+    % Estimate the current state
+    x_estimate = x_estimate_pred + K*(z - H*x_estimate_pred);
+
+    % Update the current uncertainty estimate
+    uncertainty_estimate = (eye(6) - K*H)*uncertainty_estimate_pred * (eye(6) - K*H)' + K * R * K';
+    
+    % Store the estimates and uncertainties
+    x_estimates(:, ii) = x_estimate;
+    uncertainty_estimates(:, :, ii) = uncertainty_estimate;
+    %x_y_uncertainty(:, :, ii) = [uncertainty_estimate(1,1) 0; 0 uncertainty_estimate(4,4)];
+
+    % 3. Predict 
+    x_estimate_pred = F*x_estimate;
+    uncertainty_estimate_pred = F * uncertainty_estimate * F' + Q;
+
+end
+
+%% Confidence ellipse
+CI = 95; % in percentage 
+
+x_y_estimate(:,:) = [x_estimates(1,:);x_estimates(4,:)];
+
+% Extract the uncertainty for x (1,1 element) and y (4,4 element)
+x_uncertainty = squeeze(uncertainty_estimates(1, 1, :)); % Uncertainty in x
+y_uncertainty = squeeze(uncertainty_estimates(4, 4, :)); % Uncertainty in y
+% Combine x and y uncertainties into a 2x2xN array
+x_y_uncertainty = zeros(2, 2, length(x));
+x_y_uncertainty(1, 1, :) = x_uncertainty;
+x_y_uncertainty(2, 2, :) = y_uncertainty;
+
+r_ellipses = calculate_error_ellipses (x_y_estimate, x_y_uncertainty, CI);
+
+
+%% Plotting
+
+
+% Creating vehicle position plot
+
+% Extract x and y estimates
+x_estimate_values = x_estimates(1, :);
+y_estimate_values = x_estimates(4, :);
+
+figure;
+plot(x_total, y_total, 'gd-', 'LineWidth', 1.5,'Color', [0.1, 0.63, 0.1]); % Model based--true values
+hold on;
+plot(x, y, 'bs-', 'LineWidth', 2); % Measurements 
+plot(x_estimate_values, y_estimate_values, 'ro-', 'LineWidth', 1.5, 'MarkerSize', 6); % KF estimate
+grid on;
+xlabel('X (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Y (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Vehicle Position', 'FontSize', 20, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+%set(gca, 'YDir', 'normal'); % Ensure the y-axis direction is normal (default)
+legend('True values', 'Measurements', 'Estimates')
+
+% Set figure size
+set(gcf, 'Position', [100, 100, 400, 800]);
+
+% Ensure equal scaling for both axes
+axis equal;
+
+% Customizing the font size for axes
+set(gca, 'FontSize', 14);
+
+%2. Creating vehicle x-axis/y-axis velocity plot
+
+% Extract x- and y- velocity estimates
+v_x_estimate = x_estimates(2, :);
+v_y_estimate = x_estimates(5, :);
+
+
+
+%True Velocity
+v_x_true = diff(x_total)/delta_T;
+v_y_true = diff(y_total)/delta_T;
+
+
+figure;
+plot([1:34], v_x_true, 'gd-', 'LineWidth', 1.5,'Color', [0.1, 0.63, 0.1]); % Model based--true values
+hold on;
+plot([1:34], v_x_estimate(1:34), 'ro-', 'LineWidth', 1.5, 'MarkerSize', 6); % KF estimate
+grid on;
+xlabel('X (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Y (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Vehicle x-axis velocity', 'FontSize', 20, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+%set(gca, 'YDir', 'normal'); % Ensure the y-axis direction is normal (default)
+legend('True values', 'Estimates')
+
+
+figure;
+plot([1:34], v_y_true, 'gd-', 'LineWidth', 1.5,'Color', [0.1, 0.63, 0.1]); % Model based--true values
+hold on;
+plot([1:34], v_y_estimate(1:34), 'ro-', 'LineWidth', 1.5, 'MarkerSize', 6); % KF estimate
+grid on;
+xlabel('X (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Y (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Vehicle y-axis velocity', 'FontSize', 20, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+%set(gca, 'YDir', 'normal'); % Ensure the y-axis direction is normal (default)
+legend('True values', 'Estimates')
+
+
+
+% plot with error ellipses
+
+
+% Creating vehicle position plot
+
+% Extract x and y estimates
+x_estimate_values = x_estimates(1, :);
+y_estimate_values = x_estimates(4, :);
+
+figure;
+plot(x_total, y_total, 'gd-', 'LineWidth', 1.5,'Color', [0.1, 0.63, 0.1]); % Model based--true values
+hold on;
+plot(x, y, 'bs-', 'LineWidth', 2); % Measurements 
+plot(x_estimate_values, y_estimate_values, 'ro-', 'LineWidth', 1.5, 'MarkerSize', 6); % KF estimate
+
+for ii = 1:length(r_ellipses)
+    r_ellipse = r_ellipses{ii};
+    fill(r_ellipse(:, 1), r_ellipse(:, 2), 'yellow', 'EdgeColor', [0.8, 0.8, 0], 'FaceAlpha', 0.5);
+
+    %plot(r_ellipse(:, 1), r_ellipse(:, 2), '-');
+end
+
+grid on;
+xlabel('X (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Y (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Vehicle Position', 'FontSize', 20, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+%set(gca, 'YDir', 'normal'); % Ensure the y-axis direction is normal (default)
+legend('True values', 'Measurements', 'Estimates', '95% Confidence Interval')
+
+% Set figure size
+set(gcf, 'Position', [100, 100, 400, 800]);
+
+% Ensure equal scaling for both axes
+axis equal;
+
+% Customizing the font size for axes
+set(gca, 'FontSize', 14);
+
+
+%% estimation uncertainty 
+figure(20);
+
+plot([1:35], x_uncertainty, 'bo-', 'LineWidth', 1.5, 'MarkerSize', 6); % KF estimate
+grid on;
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Varinace (m^2)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+%title('Vehicle x-axis velocity', 'FontSize', 20, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+%set(gca, 'YDir', 'normal'); % Ensure the y-axis direction is normal (default)
+%legend('True values', 'Estimates')
+
