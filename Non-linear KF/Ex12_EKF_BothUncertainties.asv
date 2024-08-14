@@ -1,0 +1,222 @@
+clc; close all; clear all;
+
+% Define the parameters
+L = 0.5; % Length of the pendulum (m)
+g = 9.8; % Gravitational acceleration (m/s^2)
+theta0 = 0.2; % Initial angle (radians)
+omega0 = 0; % Initial angular velocity (rad/s)
+sigma_a = 1; % Process Noise Uncertainty (rad/s^2)
+T = 2.5; % Total time (s)
+dt = 0.05; % Time step (s)
+t = 0:dt:T; % Time vector
+
+% Initialize arrays
+theta = zeros(size(t));
+omega = zeros(size(t));
+
+% Set initial conditions
+theta(1) = theta0;
+omega(1) = omega0;
+
+% Generate process noise for angular acceleration
+a_noise = sigma_a * randn(size(t));
+
+% Simulate the pendulum with process noise
+for i = 2:length(t)
+    % Update angular velocity with process noise
+    omega(i) = omega(i-1) - (g/L) * sin(theta(i-1)) * dt + a_noise(i) * dt;
+    % Update angle
+    theta(i) = theta(i-1) + omega(i) * dt;
+end
+
+
+% Plot theta over time
+figure;
+subplot(3,1,1);
+plot(t, theta, 'r-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('\theta (rad)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum Angle', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+
+% Plot angular velocity over time
+subplot(3,1,2);
+plot(t, omega, 'g-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Angular Velocity (rad/s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum Angular Velocity', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+
+% Plot x over time
+% Compute x = L * sin(theta)
+x_pos = L * sin(theta);
+subplot(3,1,3);
+plot(t, x_pos, 'b-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('x (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum Displacement', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+
+
+
+
+
+%% Filtering
+
+delta_T = dt; % measurements period
+L = 0.5; %The Pendulum string length (m)
+g = 9.8; % Gravitational acceleration constant (m/s2)
+sigma_x_m = 0.01; % Measurement uncertainty (standard deviation) (m)
+sigma_a = 1; % Process Noise Uncertainty (angular acceleration standard deviation) (rad)
+
+% Process noise matrix (Q)
+Q = sigma_a^2*[delta_T^4/4 delta_T^3/2;...
+               delta_T^3/2 delta_T^2];
+
+% Measurment uncertainty 
+R = [sigma_x_m^2];
+
+% Define the data, adding some random noise to the measurement as full
+% measurements are not given in the book and we need to create x from the
+% true theta generated above
+x = x_pos + 0.01*randn(1,length(x_pos)); 
+
+% Iteration Zero
+% 1. Initialization 
+
+x_estimate_init = [0.0873 0]'; %x^hat(0,0)
+uncertainty_estimate_init = [5 0; ...
+                             0 5]; % uncertainty estimate P(0,0)
+% 2. Predication
+x_estimate_pred   = [x_estimate_init(1) + x_estimate_init(2)*delta_T; ...
+         x_estimate_init(2) - g/L * sin(x_estimate_init(1))*delta_T]; % earlier in ex11, I called it x_estimate_pred
+f_x_jacobian = [1 delta_T; ...
+                -g/L*cos(x_estimate_init(1))*delta_T 1];
+
+uncertainty_estimate_pred = f_x_jacobian*uncertainty_estimate_init*f_x_jacobian' + Q; 
+
+% Storage for estimates and uncertainties
+x_estimates = zeros(2, length(x));
+uncertainty_estimates = zeros(2, 2, length(x));
+x_y_uncertainty = zeros(2,2, length(x));
+
+% KF Loop 
+for ii = 1:length(x)
+    
+    % 1. Measure
+    z = [x(ii)];
+    
+    % 2. Update
+
+    %Observation matrix (h(ˆx1,0)) calculation.
+
+    h_x          = L*sin(x_estimate_pred(1));
+
+    h_x_jacobian =  [L*cos(x_estimate_pred(1)) 0];
+
+    % Kalman gain 
+    K = uncertainty_estimate_pred * h_x_jacobian' * (h_x_jacobian * uncertainty_estimate_pred * h_x_jacobian' + R)^(-1); 
+
+    % Estimate the current state
+    x_estimate = x_estimate_pred + K*(z - h_x);
+
+    % Update the current uncertainty estimate
+    uncertainty_estimate = (eye(2) - K*h_x_jacobian)*uncertainty_estimate_pred * (eye(2) - K*h_x_jacobian)' + K * R * K';
+    
+    % Store the estimates and uncertainties
+    x_estimates(:, ii) = x_estimate;
+    uncertainty_estimates(:, :, ii) = uncertainty_estimate;
+    %x_y_uncertainty(:, :, ii) = [uncertainty_estimate(1,1) 0; 0 uncertainty_estimate(4,4)];
+
+    % 3. Predict 
+    x_estimate_pred   = [x_estimate(1) + x_estimate(2)*delta_T; ...
+                         x_estimate(2) - g/L * sin(x_estimate(1))*delta_T]; % earlier in ex11, I called it x_estimate_pred
+    f_x_jacobian = [1 delta_T; ...
+                    -g/L*cos(x_estimate(1))*delta_T 1];
+    
+    uncertainty_estimate_pred = f_x_jacobian*uncertainty_estimate*f_x_jacobian' + Q; 
+
+end
+
+
+%% Confidence ellipse
+
+CI = 95;
+temp = (1 - CI/100)/2;
+
+uncertainty_x = squeeze(uncertainty_estimates(1,1,:))';
+uncertainty_y = squeeze(uncertainty_estimates(2,2,:))';
+
+
+x_low = x_estimates(1,:) - norminv(temp)*sqrt(uncertainty_x);
+x_up  = x_estimates(1,:) + norminv(temp)*sqrt(uncertainty_x);
+
+y_low = x_estimates(2,:) - norminv(temp)*sqrt(uncertainty_y);
+y_up  = x_estimates(2,:) + norminv(temp)*sqrt(uncertainty_y);
+
+
+%% Plotting
+
+
+% Creating rocket altitude plot
+
+
+figure;
+
+plot(t, theta, 'gs-', 'LineWidth', 2); % True angle values
+hold on;
+plot(t, asin(x_pos/L), 'bs-', 'LineWidth', 2); % Measurements x = L*sin(theta) 
+plot(t, x_estimates(1,:), 'ro-', 'LineWidth', 1.5, 'MarkerSize', 6); % KF estimate
+grid on;
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Altitude (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Rocket altitude', 'FontSize', 20, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+%set(gca, 'YDir', 'normal'); % Ensure the y-axis direction is normal (default)
+
+
+plot(x_axis, x_low, 'r', 'LineWidth',1);
+plot(x_axis, x_up, 'r', 'LineWidth',1);
+x2 = [x_axis, fliplr(x_axis)];
+inBetween = [x_low, fliplr(x_up)];
+p4 = patch(x2, inBetween, 'y');
+%legend(p1,'Area 1')
+alpha(0.25)
+
+legend('True values', 'Measurements', 'Estimates', '95% CI')
+
+
+% Customizing the font size for axes
+set(gca, 'FontSize', 14);
+
+%2. Creating rocket x-axis/y-axis velocity plot
+
+figure;
+plot(t, v_true, 'gs-', 'LineWidth', 2); % Measurements 
+x_axis = [0:delta_T:(length(h)-1)*delta_T];
+hold on;
+plot(x_axis, x_estimates(2,:), 'ro-', 'LineWidth', 1.5, 'MarkerSize', 6); % KF estimate
+grid on;
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Velocity (m/s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Rocket Velocity', 'FontSize', 20, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+%set(gca, 'YDir', 'normal'); % Ensure the y-axis direction is normal (default)
+
+
+plot(x_axis, y_low, 'r', 'LineWidth',1);
+plot(x_axis, y_up, 'r', 'LineWidth',1);
+x2 = [x_axis, fliplr(x_axis)];
+inBetween = [y_low, fliplr(y_up)];
+p4 = patch(x2, inBetween, 'y');
+%legend(p1,'Area 1')
+alpha(0.25)
+
+legend('True values', 'Estimates', '95% CI')
+
+
+% Customizing the font size for axes
+set(gca, 'FontSize', 14);
+
+
+
+
+

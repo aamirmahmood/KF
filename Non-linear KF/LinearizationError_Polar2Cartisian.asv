@@ -1,0 +1,162 @@
+clc; close all; clear all;
+
+% Define the parameters
+mu_r = 1;
+sigma_r = 0.05;
+mu_theta = pi/2;
+sigma_theta = 0.5;
+
+chisquare_val = sqrt(chi2inv(68/100, 2));
+num_samples = 1000;
+
+% Generate 1000 random points (samples) with normal distribution in polar coordinates
+r_samples = normrnd(mu_r, sigma_r, num_samples, 1);
+theta_samples = normrnd(mu_theta, sigma_theta, num_samples, 1);
+
+% Transform all the samples from polar to cartesian coordinates
+x_samples = r_samples .* cos(theta_samples);
+y_samples = r_samples .* sin(theta_samples);
+
+% Plot the random samples in polar coordinates
+figure;
+subplot(1, 2, 1);
+plot(r_samples, theta_samples,'b.');
+xlabel('r (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('\theta (rad)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Random Samples in Polar Coordinates');
+hold on;
+
+% Calculate and plot the covariance ellipse in polar coordinates
+theta = linspace(0, 2*pi, 1000);
+polar_r = mu_r + sigma_r * cos(theta);
+polar_theta = mu_theta + sigma_theta * sin(theta);
+plot(polar_r, polar_theta, 'g-', 'Color',[0.2 0.53 0.2], 'LineWidth', 2);
+hold off;
+
+legend('Random samples', 'Covariance');
+
+% Plot the random samples in cartesian coordinates
+subplot(1, 2, 2);
+plot(x_samples, y_samples, 'b.');
+title('Random Samples in Cartesian Coordinates');
+xlabel('x (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('y (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+axis equal;
+hold on;
+
+%% Calculate and plot the covariance ellipse in cartesian coordinates
+
+cov_matrix = cov(x_samples, y_samples);
+[eigenvec, eigenval] = eig(cov_matrix);
+
+% Get the index of the largest eigenvector
+[largest_eigenvec_ind_c, r] = find(eigenval == max(max(eigenval)));
+largest_eigenvec = eigenvec(:, largest_eigenvec_ind_c);
+
+% Get the largest eigenvalue
+largest_eigenval = max(max(eigenval));
+
+% Get the smallest eigenvector and eigenvalue
+if largest_eigenvec_ind_c == 1
+    smallest_eigenval = max(eigenval(:, 2));
+    smallest_eigenvec = eigenvec(:, 2);
+else
+    smallest_eigenval = max(eigenval(:, 1));
+    smallest_eigenvec = eigenvec(:, 1);
+end
+
+% Calculate the angle between the x-axis and the largest eigenvector
+angle = atan2(largest_eigenvec(2), largest_eigenvec(1));
+
+% Shift angle to be between 0 and 2pi
+if angle < 0
+    angle = angle + 2 * pi;
+end
+
+% Get the coordinates of the data mean
+X0 = mean(x_samples);
+Y0 = mean(y_samples);
+
+% Get the 95% confidence interval error ellipse
+a = chisquare_val * sqrt(largest_eigenval);
+b = chisquare_val * sqrt(smallest_eigenval);
+
+% Define the ellipse in x and y coordinates
+theta_grid = linspace(0, 2 * pi);
+ellipse_x_r = a * cos(theta_grid);
+ellipse_y_r = b * sin(theta_grid);
+
+% Define a rotation matrix
+R = [cos(angle) sin(angle); -sin(angle) cos(angle)];
+
+% Rotate the ellipse to the angle phi
+r_ellipse = [ellipse_x_r; ellipse_y_r]' * R;
+
+plot(r_ellipse(:, 1) + X0, r_ellipse(:, 2) + Y0,  'g-', 'Color',[0.2 0.53 0.2], 'LineWidth', 2);
+
+
+%% Linearized covariance (EKF) ellipse in cartesian coordinates
+
+%syms r1 theta1
+
+%H = [r1*cos(theta1), r1*sin(theta1)]
+
+%J = jacobian(H);
+
+r_mean     = mean(r_samples);
+theta_mean = mean(theta_samples);
+
+
+
+J = [cos(theta_mean), -r_mean*sin(theta_mean); sin(theta_mean),  r_mean*cos(theta_mean)];
+
+cov_matrix_linearized = J * diag([sigma_r sigma_theta].^2) * J';
+
+[eigenvec, eigenval] = eig(cov_matrix_linearized);
+
+% Get the index of the largest eigenvector
+[largest_eigenvec_ind_c, r] = find(eigenval == max(max(eigenval)));
+largest_eigenvec = eigenvec(:, largest_eigenvec_ind_c);
+
+% Get the largest eigenvalue
+largest_eigenval = max(max(eigenval));
+
+% Get the smallest eigenvector and eigenvalue
+if largest_eigenvec_ind_c == 1
+    smallest_eigenval = max(eigenval(:, 2));
+    smallest_eigenvec = eigenvec(:, 2);
+else
+    smallest_eigenval = max(eigenval(:, 1));
+    smallest_eigenvec = eigenvec(:, 1);
+end
+
+% Calculate the angle between the x-axis and the largest eigenvector
+angle = atan2(largest_eigenvec(2), largest_eigenvec(1));
+
+% Shift angle to be between 0 and 2pi
+if angle < 0
+    angle = angle + 2 * pi;
+end
+
+% Get the coordinates of the data mean
+%X0 = mean(x_samples);
+%Y0 = mean(y_samples);
+
+% Get the 95% confidence interval error ellipse
+a = chisquare_val * sqrt(largest_eigenval);
+b = chisquare_val * sqrt(smallest_eigenval);
+
+% Define the ellipse in x and y coordinates
+theta_grid = linspace(0, 2 * pi);
+ellipse_x_r = a * cos(theta_grid);
+ellipse_y_r = b * sin(theta_grid);
+
+% Define a rotation matrix
+R = [cos(angle) sin(angle); -sin(angle) cos(angle)];
+
+% Rotate the ellipse to the angle phi
+r_ellipse = [ellipse_x_r; ellipse_y_r]' * R;
+
+plot(r_ellipse(:, 1) + X0, r_ellipse(:, 2) + Y0,  'r-', 'LineWidth', 2);
+legend('Random samples','True Covariance', 'EKF Linearized Covariance')
+

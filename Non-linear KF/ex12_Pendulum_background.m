@@ -1,0 +1,120 @@
+clc; close all; clear all;
+
+% • The Pendulum string length: L = 0.5m
+% • Gravitational acceleration constant: g = 9.8m/s2
+% • Measurement Uncertainty (standard deviation): σxm = 0.01m
+% • Process Noise Uncertainty (angular acceleration standard deviation): σa = 1rad/s2
+
+
+% Define the parameters
+L = 0.5; % Length of the pendulum (m)
+g = 9.8; % Gravitational acceleration (m/s^2)
+theta0 = 0.8; % Initial angle (radians)
+omega0 = 0; % Initial angular velocity (rad/s)
+T = 2.5; % Total time (s)
+dt = 0.01; % Time step (s)
+t = 0:dt:T; % Time vector
+
+% Calculate theta over time using the simple harmonic motion approximation
+%theta = theta0 * cos(sqrt(g/L) * t) if omega0=0 otherwise as below;
+
+theta = theta0 * cos(sqrt(g/L)*t) + (omega0/sqrt(g/L)) * sin(sqrt(g/L) * t);
+
+
+% Plot theta over time
+figure;
+subplot(3,1,1);
+plot(t, theta, 'r-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('\theta (rad)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum Angle', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+axis([-0.1 2.6 -0.85 0.85])
+
+% Plot angular velocity over time 
+% Calculate angular velocity (dtheta/dt)
+omega = -theta0 * sqrt(g/L) * sin(sqrt(g/L) * t);
+
+subplot(3,1,2);
+plot(t, omega, 'g-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Angular velocity (rad/s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum True Angular Velocity', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+%axis([-0.1 2.6 -0.85 0.85])
+
+% Plot x over time
+% Compute x = L * sin(theta)
+x = L * sin(theta);
+subplot(3,1,3);
+plot(t, x, 'b-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('x (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum Displacement', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+
+
+
+%% Process noise
+clear all;
+
+% Define the parameters
+L = 0.5; % Length of the pendulum (m)
+g = 9.8; % Gravitational acceleration (m/s^2)
+theta0 = 0.2; % Initial angle (radians)
+omega0 = 0; % Initial angular velocity (rad/s)
+sigma_a = 1; % Process Noise Uncertainty (rad/s^2)
+T = 2.5; % Total time (s)
+dt = 0.01; % Time step (s)
+t = 0:dt:T; % Time vector
+
+% Initialize arrays
+theta = zeros(size(t));
+omega = zeros(size(t));
+
+% Set initial conditions
+theta(1) = theta0;
+omega(1) = omega0;
+
+% Generate process noise for angular acceleration
+a_noise = sigma_a * randn(size(t));
+
+% Simulate the pendulum with process noise
+for i = 2:length(t)
+    % Update angular velocity with process noise
+    omega(i) = omega(i-1) - (g/L) * sin(theta(i-1)) * dt + a_noise(i) * dt;
+    % Update angle
+    theta(i) = theta(i-1) + omega(i) * dt;
+end
+
+
+% Plot theta over time
+figure;
+subplot(3,1,1);
+plot(t, theta, 'r-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('\theta (rad)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum Angle', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+
+% Plot angular velocity over time
+subplot(3,1,2);
+plot(t, omega, 'g-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('Angular Velocity (rad/s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum Angular Velocity', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+
+% Plot x over time
+% Compute x = L * sin(theta)
+x = L * sin(theta);
+subplot(3,1,3);
+plot(t, x, 'b-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+ylabel('x (m)', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+title('Pendulum Displacement', 'FontSize', 18, 'FontWeight', 'bold', 'Color', [0.5, 0, 0]);
+grid on;
+
+
+
+
