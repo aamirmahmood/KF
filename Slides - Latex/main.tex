@@ -1,0 +1,82 @@
+\documentclass[8pt]{beamer}
+%\usetheme{Warsaw}
+%\usecolortheme{spruce}
+\usetheme{CambridgeUS}
+% \usefonttheme[onlymath]{serif}
+\usecolortheme{dolphin}
+\mode<presentation>{}
+
+\usepackage{empheq}
+\usepackage{url}
+
+\usepackage{array}
+\usepackage{amsmath, amsfonts, bm}
+
+\usepackage[many]{tcolorbox}
+\newtcbox{\mymath}[1][]{%
+    nobeforeafter, width=\textwidth, math upper, enhanced, 
+    colframe=gray!10!white, boxrule=0pt, arc=1mm, outer arc=1mm, opacityback=0.5,
+    frame hidden, borderline={0.5pt}{0pt}{gray!20!white},
+    #1}
+
+% Change example block width
+\addtobeamertemplate{block example begin}{%
+    \setlength{\textwidth}{0.8\textwidth}
+}{}
+
+\usepackage{booktabs}
+
+\usepackage{amsmath, amssymb, amsthm} % *** MATH PACKAGES ***
+% \setbeamertemplate{blocks}[rounded][shadow=true]
+\usepackage{tcolorbox}
+\usepackage{mathtools}
+\usepackage{tcolorbox} % For colored boxes
+\usepackage{empheq} % Extended equation environments
+%\usepackage{enumitem}
+
+\usepackage{minted}
+
+%----------------------------
+%References
+\usepackage[style=ieee]{biblatex} % You can choose different styles
+\addbibresource{References.bib} % Add the .bib file
+
+\usepackage{framed, color}
+%% preamble
+\title{\textbf{Introduction to Kalman Filter}}
+%\subtitle{\textbf{Lecture 3 \& 4}}
+\author[Aamir Mahmood]{Aamir Mahmood \\ \footnotesize aamir.mahmood@miun.se}
+\institute[]{Mid Sweden University}
+\titlegraphic{\includegraphics[width=0.15\textwidth]{Figures/mittuniversitetet_logo.png}}
+\date{\today}
+\begin{document}
+
+%% title frame
+\begin{frame}
+
+\titlepage
+\end{frame}
+
+\input{Acknowledgements}
+%-----------------------------------------------------
+\begin{frame}[allowframebreaks]
+   \frametitle{Outline}
+		\tableofcontents
+\end{frame}
+
+%-----------------------------------------------------
+
+\input{Background}
+\input{Part 1}
+\input{Part 2}
+\input{Part 2.1}
+\input{Background3}
+\input{Part 3}
+\input{Part 4}
+%\input{g-h-filter}
+
+\begin{frame}[allowframebreaks]{References}
+  \printbibliography
+\end{frame}
+
+\end{document}
